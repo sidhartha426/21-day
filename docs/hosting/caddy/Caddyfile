@@ -1,0 +1,47 @@
+{
+    email {$ACME_EMAIL}
+    # Prevents Caddy from attempting to bind to port 80 for redirects
+    auto_https disable_redirects
+    https_port {$HTTPS_PORT}
+    servers {
+        protocols h1 h2
+    }
+}
+
+# --- SNIPPETS ---
+
+# 1. DNS-01 Challenge Configuration
+(desec_dns) {
+    tls {
+        dns desec {
+            token "{env.DESEC_API_KEY}"
+        }
+        resolvers 9.9.9.9 149.112.112.112
+        propagation_delay 150s
+        propagation_timeout 450s
+    }
+}
+
+# 2. Strict Security Headers
+(security_headers) {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        -Server
+    }
+}
+
+# 3. Common Site Configuration
+(common) {
+    import desec_dns
+    import security_headers
+    encode zstd br gzip
+}
+
+{$APP_DOMAIN} {
+    import common
+    reverse_proxy {$APP_UPSTREAM}
+}

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>21-day | Self-hosted tracker for 21-day practice challenges</title>
+    <meta
+      name="description"
+      content="21-day is an open-source, self-hostable, multi-user tracker for 21-day practice challenges. Log daily sessions, get an honest score and star rating, and receive a PDF report."
+    />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0d1716" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="21-day | Twenty-one days. One honest score." />
+    <meta
+      property="og:description"
+      content="Open-source, self-hostable tracker for 21-day practice challenges with honest scoring, PDF reports, 2FA and passkeys."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="%BASE_URL%favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="%BASE_URL%favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon.png" />
+    <script>
+      // Applied before first paint to avoid a light flash. Dark is the default, like the app.
+      ;(function () {
+        try {
+          var stored = localStorage.getItem("21-day-landing-theme")
+          var theme = stored === "light" || stored === "dark" ? stored : "dark"
+          var root = document.documentElement
+          root.classList.remove("light", "dark")
+          root.classList.add(theme)
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute("content", theme === "dark" ? "#0d1716" : "#f9fbfa")
+        } catch (_) {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

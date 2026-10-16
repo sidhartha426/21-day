@@ -1,0 +1,15 @@
+.git
+.github
+.next
+node_modules
+data
+couchdb
+docs
+.env
+.env.*
+tsconfig.tsbuildinfo
+docker
+docker-compose*.yml
+Dockerfile
+.dockerignore
+*.md

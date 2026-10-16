@@ -1,0 +1,47 @@
+# Local development only, for `pnpm dev`:
+#   - CouchDB on localhost:5984 (progress data)
+#   - Mailpit on localhost:1025 (SMTP) with its inbox at http://localhost:8025
+# Start with: pnpm couch:up    Stop with: pnpm couch:down
+
+name: 21-day-dev
+
+services:
+  couchdb:
+    image: couchdb:3
+    container_name: ${COMPOSE_PROJECT_NAME}-couchdb
+    restart: no
+    ports:
+      - '127.0.0.1:5984:5984'
+    environment:
+      TZ: UTC
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:-changeme}
+    volumes:
+      - ./couchdb/data:/opt/couchdb/data
+      - ./docker/couchdb/10-single-node.ini:/opt/couchdb/etc/local.d/10-single-node.ini   # don't change the file name it's important
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fs http://localhost:5984/_up || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: ${COMPOSE_PROJECT_NAME}-mailpit
+    restart: no
+    ports:
+      - '127.0.0.1:1025:1025'   # SMTP
+      - '127.0.0.1:8025:8025'   # web inbox
+    environment:
+      TZ: UTC
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  21-day-dev:
+    driver: bridge
+    name: 21-day-dev
+#    enable_ipv6: true  # Enable it only if you configured your docker for ipv6

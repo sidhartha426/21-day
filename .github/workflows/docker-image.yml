@@ -1,0 +1,98 @@
+name: Build and Push Multi-Arch Image
+
+# Release: git tag v-1.2.3 && git push origin v-1.2.3
+# Publishes ghcr.io/<owner>/<repo>:1.2.3, :1.2, :1 and :latest for linux/amd64 and linux/arm64.
+
+on:
+  push:
+    tags:
+      - 'v-*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Existing tag to build (e.g., v-1.0.0)'
+        required: true
+        type: string
+
+concurrency:
+  group: docker-image-${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  # Automatically uses "owner/repo-name" for the image
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Determine target tag
+        env:
+          INPUT_TAG: ${{ inputs.tag_name }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET_TAG="$INPUT_TAG"
+          else
+            TARGET_TAG="$GITHUB_REF_NAME"
+          fi
+          case "$TARGET_TAG" in
+            v-[0-9]*) ;;
+            *) echo "::error::Tag '$TARGET_TAG' must look like v-1.2.3"; exit 1 ;;
+          esac
+          echo "TARGET_TAG=$TARGET_TAG" >> "$GITHUB_ENV"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.TARGET_TAG }}
+
+      - name: Extract version from tag
+        id: extract_version
+        run: |
+          # Strips the 'v-' prefix (e.g., "v-1.0.0" -> "1.0.0") so the semver parser can read it
+          echo "version=${TARGET_TAG#v-}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.extract_version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.extract_version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.extract_version.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=21-day
+            org.opencontainers.image.description=Self-hostable, multi-user tracker for 21-day practice challenges
+            org.opencontainers.image.version=${{ steps.extract_version.outputs.version }}
+
+      - name: Build and push Docker image to GHCR
+        uses: docker/build-push-action@v7
+        with:
+          # Targets the root directory of the repository (uses the root Dockerfile)
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          no-cache: true

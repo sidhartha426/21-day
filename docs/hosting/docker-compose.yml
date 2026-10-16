@@ -1,0 +1,137 @@
+# Self-hosting stack: Next.js app (Node.js) + CouchDB.
+#   cp .env.docker.example .env   # then fill in the values
+#   docker compose up -d
+#
+# For local development (CouchDB only) use: pnpm couch:up
+
+name: 21-day
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+
+  couchdb:
+    image: couchdb:3
+    container_name: ${COMPOSE_PROJECT_NAME}-couchdb
+    restart: unless-stopped
+    logging: *default-logging
+    stop_grace_period: 60s
+    
+    environment:
+      TZ: Etc/UTC
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?Set COUCHDB_PASSWORD in .env}
+      
+    volumes:
+      - ./couchdb/data:/opt/couchdb/data
+      - ./couchdb/10-single-node.ini:/opt/couchdb/etc/local.d/10-single-node.ini # don't change the file name it's important
+      
+    networks:
+      - 21_day_network
+      
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:5984/_up || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+      start_interval: 1s
+
+  app:
+    image: ghcr.io/sidhartha426/21-day:latest
+    container_name: ${COMPOSE_PROJECT_NAME}-app
+    restart: unless-stopped
+    logging: *default-logging
+    stop_grace_period: 60s
+    
+    environment:
+      TZ: Etc/UTC
+      
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env (openssl rand -base64 32)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?Set BETTER_AUTH_URL in .env to the public URL of the app}
+      # PASSKEY_RP_ID: ${PASSKEY_RP_ID:-}
+      
+      DATABASE_PATH: /app/data/auth.db
+      
+      COUCHDB_URL: ${COUCHDB_URL:-http://couchdb:5984}
+      COUCHDB_USER: ${COUCHDB_USER:-admin}
+      COUCHDB_PASSWORD: ${COUCHDB_PASSWORD:?Set COUCHDB_PASSWORD in .env}
+      COUCHDB_DB: ${COUCHDB_DB:-challenge_tracker}
+      
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-}
+      
+      NTFY_DEFAULT_SERVER: ${NTFY_DEFAULT_SERVER:-https://ntfy.sh}
+
+    volumes:
+      - ./app/data:/app/data
+
+    networks:
+      - 21_day_network
+
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/auth/ok').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+      start_interval: 1s
+
+
+  caddy:
+    image: ghcr.io/sidhartha426/caddy:latest-desec-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}-caddy
+    restart: unless-stopped
+    logging: *default-logging
+    stop_grace_period: 30s
+
+    ports:
+      - "${HTTPS_PORT:-443}:${HTTPS_PORT:-443}/tcp"
+      - "${HTTPS_PORT:-443}:${HTTPS_PORT:-443}/udp"
+
+    environment:
+      TZ: Etc/UTC
+      HTTPS_PORT: ${HTTPS_PORT:-443}
+      ACME_EMAIL: ${ACME_EMAIL}
+      DESEC_API_KEY: ${DESEC_API_KEY}
+      APP_DOMAIN: ${APP_DOMAIN}
+      APP_UPSTREAM: ${APP_UPSTREAM:-app:3000}
+
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/data:/data
+      - ./caddy/config:/config
+
+    networks:
+      - 21_day_network
+      
+    depends_on:
+      app:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:2019/metrics || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      start_interval: 1s
+
+
+networks:
+  21_day_network:
+    driver: bridge
+    name: 21_day_network
+#    enable_ipv6: true         # Enable it only if you configured your docker for ipv6

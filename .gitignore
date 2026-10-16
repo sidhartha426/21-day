@@ -1,0 +1,11 @@
+# Environment variables
+.env
+.env*.local
+!.env*.example
+
+# Common ignores
+/couchdb/
+/data/
+node_modules/
+.next/
+.DS_Store
